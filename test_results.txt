@@ -1,0 +1,2 @@
+no down sampling
+| Epoch: 19| TrainLoss: 0.07245| TestLoss: 0.08189| TrainAcc: 0.84520| TestAcc: 0.83520|
