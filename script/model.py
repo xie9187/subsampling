@@ -101,4 +101,4 @@ if __name__ == '__main__':
         a = tf.placeholder(tf.float32, shape=[2, 10, 5], name='a')
         b = uniform_sampling(a, 3)
         data = np.reshape(np.arange(100, dtype=np.float32), [2, 10, 5])
-        print sess.run(b, feed_dict={a: data})
+        print(sess.run(b, feed_dict={a: data}))

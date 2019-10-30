@@ -19,8 +19,8 @@ flag.DEFINE_integer('num_col', 28, 'number of columns.')
 flag.DEFINE_integer('num_pt', 28**2, 'max num of point.')
 flag.DEFINE_integer('dim_input', 3, 'Size of input.')
 flag.DEFINE_integer('num_class', 10, 'Number of classes.')
-flag.DEFINE_string('data_dir', '/Work/data/mnist', 'Data directory')
-flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling/saved_network', 'saved model directory.')
+flag.DEFINE_string('data_dir', 'C:\Work\data\mnist', 'Data directory')
+flag.DEFINE_string('model_dir', 'C:\Work\git\subsampling', 'saved model directory.')
 flag.DEFINE_integer('max_epoch', 20, 'max epochs.')
 flag.DEFINE_boolean('save_model', False, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
@@ -77,9 +77,9 @@ def training(sess):
 
     trainable_var = tf.trainable_variables()
     part_var = []
-    print 'Trainable var list: '
+    print('Trainable var list: ')
     for idx, v in enumerate(trainable_var):
-        print '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name)
+        print( '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name))
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
@@ -90,12 +90,12 @@ def training(sess):
         checkpoint = tf.train.get_checkpoint_state(model_dir) 
         if checkpoint and checkpoint.model_checkpoint_path:
             saver.restore(sess, checkpoint.model_checkpoint_path)
-            print 'model loaded: ', checkpoint.model_checkpoint_path 
+            print( 'model loaded: ', checkpoint.model_checkpoint_path )
         else:
-            print 'model not found'
+            print( 'model not found')
 
     start_time = time.time()
-    print 'start training'
+    print( 'start training')
     for epoch in range(flags.max_epoch):
         # training
         loss_list = []
@@ -139,7 +139,7 @@ def training(sess):
                      '| TrainAcc: {:2.5f}'.format(acc_train) + \
                      '| TestAcc: {:2.5f}'.format(acc_valid) + \
                      '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.)
-        print info_train
+        print( info_train)
 
         if flags.save_model and epoch == flags.max_epoch-1:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
