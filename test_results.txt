@@ -1,2 +1,5 @@
-no down sampling
+no down sampling 784 points
 | Epoch: 19| TrainLoss: 0.07245| TestLoss: 0.08189| TrainAcc: 0.84520| TestAcc: 0.83520|
+
+uniform down sampling 100 points
+| Epoch: 19| TrainLoss: 0.40694| TestLoss: 0.39135| TrainAcc: 0.31787| TestAcc: 0.38320|
