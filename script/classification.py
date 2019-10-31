@@ -11,7 +11,7 @@ from model import pointnet
 RANDOM_SEED = 1234
 flag = tf.app.flags
 
-flag.DEFINE_integer('batch_size', 8, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-3, 'Learning rate.')
 flag.DEFINE_integer('n_hidden', 64, 'Size of each model layer.')
 flag.DEFINE_integer('num_row', 28, 'number of rows.')
@@ -19,9 +19,9 @@ flag.DEFINE_integer('num_col', 28, 'number of columns.')
 flag.DEFINE_integer('num_pt', 28**2, 'max num of point.')
 flag.DEFINE_integer('dim_input', 3, 'Size of input.')
 flag.DEFINE_integer('num_class', 10, 'Number of classes.')
-flag.DEFINE_string('data_dir', 'C:\Work\data\mnist', 'Data directory')
-flag.DEFINE_string('model_dir', 'C:\Work\git\subsampling', 'saved model directory.')
-flag.DEFINE_integer('max_epoch', 20, 'max epochs.')
+flag.DEFINE_string('data_dir', '/Work/data/mnist', 'Data directory')
+flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling', 'saved model directory.')
+flag.DEFINE_integer('max_epoch', 300, 'max epochs.')
 flag.DEFINE_boolean('save_model', False, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('is_training', False, 'training or not.')
@@ -74,6 +74,9 @@ def training(sess):
     valid_data = read_data(os.path.join(flags.data_dir, 'mnist_test.csv'))
     batch_size = flags.batch_size
     model = pointnet(sess, flags)
+    init_temp = 1.
+    final_temp = 0.01
+    decay = (final_temp/init_temp)**(1./float(flags.max_epoch))
 
     trainable_var = tf.trainable_variables()
     part_var = []
@@ -96,6 +99,7 @@ def training(sess):
 
     start_time = time.time()
     print( 'start training')
+    temp = init_temp
     for epoch in range(flags.max_epoch):
         # training
         loss_list = []
@@ -109,9 +113,10 @@ def training(sess):
         all_t = 0
         for t in xrange(len(train_data)/batch_size):
             batch_data = get_a_batch(train_data, t*batch_size)
-            acc, loss, _ = model.train(batch_data)
+            acc, loss, _ = model.train(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
+            temp *= decay
             all_t += 1
             bar.update(all_t)
         loss_train = np.mean(loss_list)
@@ -124,7 +129,7 @@ def training(sess):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = get_a_batch(valid_data, t*batch_size)
-            acc, loss = model.validate(batch_data)
+            acc, loss = model.validate(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -138,7 +143,8 @@ def training(sess):
                      '| TestLoss: {:2.5f}'.format(loss_valid) + \
                      '| TrainAcc: {:2.5f}'.format(acc_train) + \
                      '| TestAcc: {:2.5f}'.format(acc_valid) + \
-                     '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.)
+                     '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.) + \
+                     '| Temp: {:1.5f}'.format(temp)
         print( info_train)
 
         if flags.save_model and epoch == flags.max_epoch-1:
