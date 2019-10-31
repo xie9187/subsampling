@@ -26,6 +26,7 @@ flag.DEFINE_boolean('save_model', False, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('is_training', False, 'training or not.')
 flag.DEFINE_string('model_name', 'test', 'model name.')
+flag.DEFINE_string('sample_mode', 'normal', '[uniform, normal, determine]')
 flags = flag.FLAGS
 
 def read_data(data_path):

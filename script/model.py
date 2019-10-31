@@ -18,8 +18,14 @@ class pointnet(object):
         self.t = tf.placeholder(tf.float32, shape=[], name='temperature')
 
         # sampling
-        # sampled_input = uniform_sampling(self.input, 100)
-        sampled_input = my_sampling(self.input, self.t, 100)
+        if 'uniform' in flags.sample_mode:
+            sampled_input = uniform_sampling(self.input, 100)
+        elif 'normal' in flags.sample_mode:
+            sampled_input = my_sampling(self.input, self.t, 100, True)
+        elif'determine' in flags.sample_mode:
+            sampled_input = my_sampling(self.input, self.t, 100, False)
+        else:
+            sampled_input = self.input
 
         logits = self.get_model(sampled_input, self.is_training)
         y = tf.argmax(logits, axis=1, output_type=tf.int32)
@@ -98,12 +104,16 @@ def uniform_sampling(features, k=100):
     sub_features = tf.gather_nd(features, coords) # b, k, d
     return sub_features
 
-def my_sampling(features, t, k=100):
+def my_sampling(features, t, k=100, noise_flag=True):
     b, n, d = features.get_shape().as_list() # b, n, d
     # score for each point
     score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
     score = model_utils.dense_layer(features, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
-    score = tf.reshape(score, [-1, n]) # b, n
+    if noise_flag:
+        score += tf.nn.relu(tf.random.truncated_normal([b*n, 1], stddev=t**2)) # b*n, 1
+        score = tf.reshape(score, [-1, n])/2 # b, n
+    else:
+        score = tf.reshape(score, [-1, n]) # b, n
     # sort with top_k
     sorted_score, sorted_indicies = tf.nn.top_k(score, n) # b, n
     coord1 = tf.reshape(tf.tile(tf.expand_dims(tf.range(b), axis=-1), [1, n]), [-1]) # b*k
