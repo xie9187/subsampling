@@ -116,7 +116,6 @@ def training(sess):
             acc, loss, _ = model.train(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
-            temp *= decay
             all_t += 1
             bar.update(all_t)
         loss_train = np.mean(loss_list)
@@ -145,8 +144,8 @@ def training(sess):
                      '| TestAcc: {:2.5f}'.format(acc_valid) + \
                      '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.) + \
                      '| Temp: {:1.5f}'.format(temp)
-        print( info_train)
-
+        print(info_train)
+        temp *= decay
         if flags.save_model and epoch == flags.max_epoch-1:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
 
