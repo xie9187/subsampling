@@ -101,7 +101,7 @@ def uniform_sampling(features, k=100):
 def my_sampling(features, t, k=100):
     b, n, d = features.get_shape().as_list() # b, n, d
     # score for each point
-    score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_hi1') # b*n, 256
+    score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
     score = model_utils.dense_layer(features, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
     score = tf.reshape(score, [-1, n]) # b, n
     # sort with top_k
