@@ -122,14 +122,18 @@ def my_sampling(features, t, k=100, noise_flag=True):
     sorted_features = tf.gather_nd(features, coords) # b, n, d
     top_features, bot_features = tf.split(sorted_features, [k, n-k], axis=1)
     top_scores, bot_scores = tf.split(sorted_score, [k, n-k], axis=1)
-    # C
-    bot_scores = tf.nn.softmax(bot_scores, axis=1) # b, n-k
-    bot_scores = tf.tile(tf.expand_dims(bot_scores, axis=2), [1, 1, d]) # b, n-k, d
-    powered_bot_scores = tf.pow(bot_scores, 1/t)
-    C = tf.reduce_sum(powered_bot_scores*bot_features, axis=1, keepdims=True) # b, 1, d
+    # # C
+    # bot_scores = tf.nn.softmax(bot_scores, axis=1) # b, n-k
+    # bot_scores = tf.tile(tf.expand_dims(bot_scores, axis=2), [1, 1, d]) # b, n-k, d
+    # powered_bot_scores = tf.pow(bot_scores, 1/t)
+    # C = tf.reduce_sum(powered_bot_scores*bot_features, axis=1, keepdims=True) # b, 1, d
+    # # sampled features
+    # top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
+    # sub_features = (tf.pow(top_scores, t) * top_features + tf.tile(C, [1, k, 1]))/2
+
     # sampled features
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
-    sub_features = (tf.pow(top_scores, t) * top_features + tf.tile(C, [1, k, 1]))/2
+    sub_features = tf.pow(top_scores, t) * top_features
     return sub_features, top_features
 
 if __name__ == '__main__':
