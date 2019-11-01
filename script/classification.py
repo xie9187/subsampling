@@ -20,8 +20,8 @@ flag.DEFINE_integer('num_pt', 28**2, 'max num of point.')
 flag.DEFINE_integer('dim_input', 3, 'Size of input.')
 flag.DEFINE_integer('num_class', 10, 'Number of classes.')
 flag.DEFINE_string('data_dir', '/Work/data/mnist', 'Data directory')
-flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling', 'saved model directory.')
-flag.DEFINE_integer('max_epoch', 300, 'max epochs.')
+flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling/saved_network', 'saved model directory.')
+flag.DEFINE_integer('max_epoch', 100, 'max epochs.')
 flag.DEFINE_boolean('save_model', False, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('is_training', False, 'training or not.')
@@ -41,17 +41,25 @@ def read_data(data_path):
         # show_img(image_2d)
         rows, columns = np.where(image_2d >= 0)
         val = image_2d[rows, columns]/255.
-        points_xyv = np.stack([rows, columns, val], axis=1).astype(np.float32)
+        points_xyv = np.stack([rows/float(flags.num_row), columns/float(flags.num_col), val], axis=1).astype(np.float32)
         # show_points_as_img(points_xyv)
         data.append([points_xyv, category])
     return data
 
 def show_points_as_img(points_xyv):
     image_2d = np.zeros([flags.num_row, flags.num_col], dtype=np.float32)
-    image_2d[points_xyv[:, 0].astype(np.int32), points_xyv[:, 1].astype(np.int32)] = points_xyv[:, 2]
+    image_2d[(points_xyv[:, 0]*flags.num_row).astype(np.int32), 
+              (points_xyv[:, 1]*flags.num_col).astype(np.int32)] = points_xyv[:, 2]
     plt.figure('point 2 image')
     plt.imshow(image_2d, cmap="gray")
     plt.pause(0.1)
+
+def batch_point2img(points_xyv): # b, n, 3
+    image_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
+    for i in range(flags.batch_size):
+        image_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
+                    (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = points_xyv[i, :, 2]
+    return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1])
 
 def show_img(image_2d):
     plt.figure('raw image')
@@ -83,23 +91,34 @@ def training(sess):
     part_var = []
     print('Trainable var list: ')
     for idx, v in enumerate(trainable_var):
-        print( '  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name))
+        print('  var {:3}: {:20}   {}'.format(idx, str(v.get_shape()), v.name))
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init_op)
 
     model_dir = os.path.join(flags.model_dir, flags.model_name)
-    saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
+    if not os.path.exists(model_dir): 
+        os.makedirs(model_dir)
+    saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
     if flags.load_model:
         checkpoint = tf.train.get_checkpoint_state(model_dir) 
         if checkpoint and checkpoint.model_checkpoint_path:
             saver.restore(sess, checkpoint.model_checkpoint_path)
-            print( 'model loaded: ', checkpoint.model_checkpoint_path )
+            print('model loaded: ', checkpoint.model_checkpoint_path )
         else:
-            print( 'model not found')
+            print('model not found')
+    summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
+    image_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='image')
+    image_summary = tf.summary.image('image', image_ph)
+    train_acc_ph = tf.placeholder(tf.float32, shape=[], name='train_acc')
+    train_acc_summary = tf.summary.scalar('train_acc', train_acc_ph)
+    test_acc_ph = tf.placeholder(tf.float32, shape=[], name='test_acc')
+    test_acc_summary = tf.summary.scalar('test_acc', test_acc_ph)
+    temp_summary = tf.summary.scalar('temperature', model.t)
+    merged = tf.summary.merge_all()
 
     start_time = time.time()
-    print( 'start training')
+    print('start training')
     temp = init_temp
     for epoch in range(flags.max_epoch):
         # training
@@ -129,7 +148,7 @@ def training(sess):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = get_a_batch(valid_data, t*batch_size)
-            acc, loss = model.validate(batch_data, temp)
+            acc, loss, sampled_points = model.validate(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -137,6 +156,7 @@ def training(sess):
         bar.finish()
         loss_valid = np.mean(loss_list)
         acc_valid = np.mean(acc_list)
+        sampled_imgs = batch_point2img(sampled_points)
 
         info_train = '| Epoch:{:3d}'.format(epoch) + \
                      '| TrainLoss: {:2.5f}'.format(loss_train) + \
@@ -146,9 +166,15 @@ def training(sess):
                      '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.) + \
                      '| Temp: {:1.5f}'.format(temp)
         print(info_train)
-        temp *= decay
+        summary = sess.run(merged, feed_dict={image_ph: sampled_imgs,
+                                              train_acc_ph: acc_train,
+                                              test_acc_ph: acc_valid,
+                                              model.t: temp})
+        summary_writer.add_summary(summary, epoch)
         if flags.save_model and epoch == flags.max_epoch-1:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
+        if 'normal' in flags.sample_mode or 'determine' in flags.sample_mode:
+            temp *= decay
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)

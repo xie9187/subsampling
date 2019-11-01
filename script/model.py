@@ -19,15 +19,15 @@ class pointnet(object):
 
         # sampling
         if 'uniform' in flags.sample_mode:
-            sampled_input = uniform_sampling(self.input, 100)
+            self.sampled_input = uniform_sampling(self.input, 100)
         elif 'normal' in flags.sample_mode:
-            sampled_input = my_sampling(self.input, self.t, 100, True)
+            self.sampled_input = my_sampling(self.input, self.t, 100, True)
         elif'determine' in flags.sample_mode:
-            sampled_input = my_sampling(self.input, self.t, 100, False)
+            self.sampled_input = my_sampling(self.input, self.t, 100, False)
         else:
-            sampled_input = self.input
+            self.sampled_input = self.input
 
-        logits = self.get_model(sampled_input, self.is_training)
+        logits = self.get_model(self.sampled_input, self.is_training)
         y = tf.argmax(logits, axis=1, output_type=tf.int32)
         self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label, logits=logits)
         self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
@@ -89,7 +89,7 @@ class pointnet(object):
             })
 
     def validate(self, batch_data, t):
-        return self.sess.run([self.acc, self.loss], feed_dict={
+        return self.sess.run([self.acc, self.loss, self.sampled_input], feed_dict={
             self.input: batch_data[0],
             self.label: batch_data[1],
             self.is_training: True,
@@ -129,7 +129,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     C = tf.reduce_sum(powered_bot_scores*bot_features, axis=1, keepdims=True) # b, 1, d
     # sampled features
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
-    sub_features = tf.pow(top_scores, t) * top_features + tf.tile(C, [1, k, 1])
+    sub_features = (tf.pow(top_scores, t) * top_features + tf.tile(C, [1, k, 1]))/2
     return sub_features
 
 if __name__ == '__main__':
