@@ -63,7 +63,7 @@ def batch_point2img(points_xyv, score): # b, n, 3
                     (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = points_xyv[i, :, 2]
         score_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
                     (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
-    return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1]),
+    return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1]), \
            np.reshape(score, [flags.batch_size, flags.num_row, flags.num_col, 1])
 
 
