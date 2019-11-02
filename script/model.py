@@ -16,7 +16,7 @@ class pointnet(object):
         self.label = tf.placeholder(tf.int32, shape=[self.batch_size], name='label') # b, label
         self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
         self.t = tf.placeholder(tf.float32, shape=[], name='temperature')
-        self.score = tf.zeros(self.batch_size, self.num_pt)
+        self.score = tf.zeros([self.batch_size, self.num_pt], dtype=tf.float32)
 
         # sampling
         if 'uniform' in flags.sample_mode:
