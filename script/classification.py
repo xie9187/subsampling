@@ -54,12 +54,18 @@ def show_points_as_img(points_xyv):
     plt.imshow(image_2d, cmap="gray")
     plt.pause(0.1)
 
-def batch_point2img(points_xyv): # b, n, 3
+def batch_point2img(points_xyv, score): # b, n, 3
     image_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
+    score_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
+    score = no.reshape(score, [flags.batch_size, flags.num_pt])
     for i in range(flags.batch_size):
         image_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
                     (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = points_xyv[i, :, 2]
-    return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1])
+        score_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
+                    (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
+    return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1]),
+           np.reshape(score, [flags.batch_size, flags.num_row, flags.num_col, 1])
+
 
 def show_img(image_2d):
     plt.figure('raw image')
@@ -110,6 +116,8 @@ def training(sess):
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
     image_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='image')
     image_summary = tf.summary.image('image', image_ph)
+    score_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='score')
+    score_summary = tf.summary.image('score', score_ph)
     train_acc_ph = tf.placeholder(tf.float32, shape=[], name='train_acc')
     train_acc_summary = tf.summary.scalar('train_acc', train_acc_ph)
     test_acc_ph = tf.placeholder(tf.float32, shape=[], name='test_acc')
@@ -148,7 +156,7 @@ def training(sess):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = get_a_batch(valid_data, t*batch_size)
-            acc, loss, sampled_points = model.validate(batch_data, temp)
+            acc, loss, sampled_points, score = model.validate(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -156,7 +164,7 @@ def training(sess):
         bar.finish()
         loss_valid = np.mean(loss_list)
         acc_valid = np.mean(acc_list)
-        sampled_imgs = batch_point2img(sampled_points)
+        sampled_imgs, score_imgs = batch_point2img(sampled_points, score)
 
         info_train = '| Epoch:{:3d}'.format(epoch) + \
                      '| TrainLoss: {:2.5f}'.format(loss_train) + \
@@ -167,6 +175,7 @@ def training(sess):
                      '| Temp: {:1.5f}'.format(temp)
         print(info_train)
         summary = sess.run(merged, feed_dict={image_ph: sampled_imgs,
+                                              score_ph: score_imgs,
                                               train_acc_ph: acc_train,
                                               test_acc_ph: acc_valid,
                                               model.t: temp})
