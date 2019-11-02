@@ -136,7 +136,8 @@ def my_sampling(features, t, k=100, noise_flag=True):
     # sub_features = (tf.pow(top_scores, t) * top_features + tf.tile(C, [1, k, 1]))/2
 
     # sampled features
-    top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
+    # top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
+    top_scores = tf.tile(tf.expand_dims(tf.readuce_mean(top_scores, axis=1, keepdims=True), axis=2), [1, k, d]) # b, k, d
     sub_features = tf.pow(top_scores, t) * top_features
     return sub_features, sorted_features, sorted_score
 
