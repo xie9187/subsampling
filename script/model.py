@@ -16,15 +16,14 @@ class pointnet(object):
         self.label = tf.placeholder(tf.int32, shape=[self.batch_size], name='label') # b, label
         self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
         self.t = tf.placeholder(tf.float32, shape=[], name='temperature')
-        self.score = tf.zeros([self.batch_size, self.num_pt], dtype=tf.float32)
 
         # sampling
         if 'uniform' in flags.sample_mode:
-            self.sampled_input, _ = uniform_sampling(self.input, 100)
+            self.sampled_input = uniform_sampling(self.input, 100)
         elif 'normal' in flags.sample_mode:
-            self.sampled_input, self.score = my_sampling(self.input, self.t, 100, True)
+            self.sampled_input, self. sorted_input, self.score = my_sampling(self.input, self.t, 100, True)
         elif'determine' in flags.sample_mode:
-            self.sampled_input, self.score = my_sampling(self.input, self.t, 100, False)
+            self.sampled_input, self. sorted_input, self.score = my_sampling(self.input, self.t, 100, False)
         else:
             self.sampled_input = self.input
 
@@ -90,7 +89,7 @@ class pointnet(object):
             })
 
     def validate(self, batch_data, t):
-        return self.sess.run([self.acc, self.loss, self.sampled_input, self.score], feed_dict={
+        return self.sess.run([self.acc, self.loss, self.sampled_input, self.sorted_input, self.score], feed_dict={
             self.input: batch_data[0],
             self.label: batch_data[1],
             self.is_training: True,
@@ -135,7 +134,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     # sampled features
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
     sub_features = tf.pow(top_scores, t) * top_features
-    return sub_features, sorted_score
+    return sub_features, sorted_features, sorted_score
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)

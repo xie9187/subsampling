@@ -54,15 +54,15 @@ def show_points_as_img(points_xyv):
     plt.imshow(image_2d, cmap="gray")
     plt.pause(0.1)
 
-def batch_point2img(points_xyv, score): # b, n, 3
+def batch_point2img(points_xyv, sorted_points_xyv, score): # b, n, 3
     image_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
     score_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
     score = np.reshape(score, [flags.batch_size, flags.num_pt])
     for i in range(flags.batch_size):
         image_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
                     (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = points_xyv[i, :, 2]
-        score_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
-                    (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
+        score_2d[i, (sorted_points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
+                    (sorted_points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
     return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1]), \
            np.reshape(score, [flags.batch_size, flags.num_row, flags.num_col, 1])
 
@@ -156,7 +156,7 @@ def training(sess):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = get_a_batch(valid_data, t*batch_size)
-            acc, loss, sampled_points, score = model.validate(batch_data, temp)
+            acc, loss, sampled_points, sorted_points, score = model.validate(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -164,7 +164,7 @@ def training(sess):
         bar.finish()
         loss_valid = np.mean(loss_list)
         acc_valid = np.mean(acc_list)
-        sampled_imgs, score_imgs = batch_point2img(sampled_points, score)
+        sampled_imgs, score_imgs = batch_point2img(sampled_points, sorted_points, score)
 
         info_train = '| Epoch:{:3d}'.format(epoch) + \
                      '| TrainLoss: {:2.5f}'.format(loss_train) + \
