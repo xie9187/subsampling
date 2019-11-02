@@ -11,7 +11,7 @@ from model import pointnet
 RANDOM_SEED = 1234
 flag = tf.app.flags
 
-flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
 flag.DEFINE_integer('n_hidden', 64, 'Size of each model layer.')
 flag.DEFINE_integer('num_row', 28, 'number of rows.')
@@ -54,22 +54,22 @@ def show_points_as_img(points_xyv):
     plt.imshow(image_2d, cmap="gray")
     plt.pause(0.1)
 
-def batch_point2img(points_xyv, sorted_points_xyv, score): # b, n, 3
+def batch_point2img(sampled_points_xyv, points_xyv, score): # b, n, 3
     image_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
     score_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
     score = np.reshape(score, [flags.batch_size, flags.num_pt])
     for i in range(flags.batch_size):
-        x = (points_xyv[i, :, 0]*flags.num_row).astype(np.int32)
-        y = (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)
+        x = (sampled_points_xyv[i, :, 0]*flags.num_row).astype(np.int32)
+        y = (sampled_points_xyv[i, :, 1]*flags.num_col).astype(np.int32)
         x[x > flags.num_row-1] = flags.num_row - 1
         y[y > flags.num_col-1] = flags.num_col - 1
         x[x < 0] = 0
         y[y < 0] = 0
-        image_2d[i, x, y] = points_xyv[i, :, 2]
-        score_2d[i, (sorted_points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
-                    (sorted_points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
+        image_2d[i, x, y] = sampled_points_xyv[i, :, 2]
+        score_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
+                    (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
     return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1]), \
-           np.reshape(score, [flags.batch_size, flags.num_row, flags.num_col, 1])
+           np.reshape(score_2d, [flags.batch_size, flags.num_row, flags.num_col, 1])
 
 
 def show_img(image_2d):
