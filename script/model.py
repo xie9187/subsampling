@@ -113,27 +113,19 @@ def my_sampling(features, t, k=100, noise_flag=True):
     # score for each point
     score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
     score = model_utils.dense_layer(score_h1, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
+    score = tf.reshape(score, [b, n]) # b, n
     if noise_flag:
-        noise = tf.nn.relu(tf.random.truncated_normal([b*n, 1], stddev=t**2)) # b*n, 1
-        score = tf.reshape(score + noise, [-1, n]) # b, n
-    else:
-        score = tf.reshape(score, [-1, n]) # b, n
+        noise = tf.nn.relu(tf.random.truncated_normal([b, n], stddev=t**2)) # b, n
+        score += noise # b, n
     # sort with top_k
     sorted_score, sorted_indicies = tf.nn.top_k(score, n) # b, n
     coord1 = tf.reshape(tf.tile(tf.expand_dims(tf.range(b), axis=-1), [1, n]), [-1]) # b*k
     coord2 = tf.reshape(sorted_indicies, [-1]) # b*n
     coords = tf.reshape(tf.stack([coord1, coord2], axis=1), [b, n, 2]) # b, n, 2 
     sorted_features = tf.gather_nd(features, coords) # b, n, d
+        
     top_features, bot_features = tf.split(sorted_features, [k, n-k], axis=1)
     top_scores, bot_scores = tf.split(sorted_score, [k, n-k], axis=1)
-    # # C
-    # bot_scores = tf.nn.softmax(bot_scores, axis=1) # b, n-k
-    # bot_scores = tf.tile(tf.expand_dims(bot_scores, axis=2), [1, 1, d]) # b, n-k, d
-    # powered_bot_scores = tf.pow(bot_scores, 1/t)
-    # C = tf.reduce_sum(powered_bot_scores*bot_features, axis=1, keepdims=True) # b, 1, d
-    # # sampled features
-    # top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
-    # sub_features = (tf.pow(top_scores, t) * top_features + tf.tile(C, [1, k, 1]))/2
 
     # sampled features
     # top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d

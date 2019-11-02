@@ -63,6 +63,8 @@ def batch_point2img(points_xyv, sorted_points_xyv, score): # b, n, 3
         y = (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)
         x[x > flags.num_row-1] = flags.num_row - 1
         y[y > flags.num_col-1] = flags.num_col - 1
+        x[x < 0] = 0
+        y[y < 0] = 0
         image_2d[i, x, y] = points_xyv[i, :, 2]
         score_2d[i, (sorted_points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
                     (sorted_points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
