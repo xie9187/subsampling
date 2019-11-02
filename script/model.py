@@ -19,13 +19,13 @@ class pointnet(object):
 
         # sampling
         if 'uniform' in flags.sample_mode:
-            sampled_input, self.sampled_input = uniform_sampling(self.input, 100)
+            self.sampled_input = uniform_sampling(self.input, 100)
         elif 'normal' in flags.sample_mode:
-            sampled_input, self.sampled_input = my_sampling(self.input, self.t, 100, True)
+            self.sampled_input = my_sampling(self.input, self.t, 100, True)
         elif'determine' in flags.sample_mode:
-            sampled_input, self.sampled_input = my_sampling(self.input, self.t, 100, False)
+            self.sampled_input = my_sampling(self.input, self.t, 100, False)
         else:
-            sampled_input, self.sampled_input = self.input
+            self.sampled_input = self.input
 
         logits = self.get_model(sampled_input, self.is_training)
         y = tf.argmax(logits, axis=1, output_type=tf.int32)
@@ -102,7 +102,7 @@ def uniform_sampling(features, k=100):
     coord2 = tf.tile(tf.range(k), [b])
     coords = tf.reshape(tf.stack([coord1, coord2], axis=1), [b, k, 2]) # b, k, 2
     sub_features = tf.gather_nd(features, coords) # b, k, d
-    return sub_features, sub_features
+    return sub_features
 
 def my_sampling(features, t, k=100, noise_flag=True):
     b, n, d = features.get_shape().as_list() # b, n, d
@@ -134,7 +134,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     # sampled features
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
     sub_features = tf.pow(top_scores, t) * top_features
-    return sub_features, top_features
+    return sub_features
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)
