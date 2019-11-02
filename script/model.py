@@ -111,7 +111,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
     score = model_utils.dense_layer(score_h1, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
     if noise_flag:
-        noise = tf.random.truncated_normal([b*n, 1], stddev=t**2) # b*n, 1
+        noise = tf.nn.relu(tf.random.truncated_normal([b*n, 1], stddev=t**2)) # b*n, 1
         score = tf.reshape(tf.clip_by_value(score + noise, 0., 1.), [-1, n]) # b, n
     else:
         score = tf.reshape(score, [-1, n]) # b, n
