@@ -11,7 +11,7 @@ from model import pointnet
 RANDOM_SEED = 1234
 flag = tf.app.flags
 
-flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
+flag.DEFINE_integer('batch_size', 32, 'Batch size to use during training.')
 flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
 flag.DEFINE_integer('n_hidden', 64, 'Size of each model layer.')
 flag.DEFINE_integer('num_row', 28, 'number of rows.')
@@ -22,7 +22,7 @@ flag.DEFINE_integer('num_class', 10, 'Number of classes.')
 flag.DEFINE_string('data_dir', '/Work/data/mnist', 'Data directory')
 flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling/saved_network', 'saved model directory.')
 flag.DEFINE_integer('max_epoch', 100, 'max epochs.')
-flag.DEFINE_boolean('save_model', False, 'save model.')
+flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('is_training', False, 'training or not.')
 flag.DEFINE_string('model_name', 'test', 'model name.')
@@ -110,7 +110,7 @@ def training(sess):
     model_dir = os.path.join(flags.model_dir, flags.model_name)
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir)
-    saver = tf.train.Saver(max_to_keep=3, save_relative_paths=True)
+    saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
     if flags.load_model:
         checkpoint = tf.train.get_checkpoint_state(model_dir) 
         if checkpoint and checkpoint.model_checkpoint_path:
@@ -119,13 +119,13 @@ def training(sess):
         else:
             print('model not found')
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
-    image_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='image')
-    image_summary = tf.summary.image('image', image_ph)
-    score_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='score')
-    score_summary = tf.summary.image('score', score_ph)
-    train_acc_ph = tf.placeholder(tf.float32, shape=[], name='train_acc')
+    image_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='image_ph')
+    image_summary = tf.summary.image('sampled_img', image_ph)
+    score_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='score_ph')
+    score_summary = tf.summary.image('score_img', score_ph)
+    train_acc_ph = tf.placeholder(tf.float32, shape=[], name='train_acc_ph')
     train_acc_summary = tf.summary.scalar('train_acc', train_acc_ph)
-    test_acc_ph = tf.placeholder(tf.float32, shape=[], name='test_acc')
+    test_acc_ph = tf.placeholder(tf.float32, shape=[], name='test_acc_ph')
     test_acc_summary = tf.summary.scalar('test_acc', test_acc_ph)
     temp_summary = tf.summary.scalar('temperature', model.t)
     merged = tf.summary.merge_all()
@@ -161,7 +161,7 @@ def training(sess):
         pos = 0
         for t in xrange(len(valid_data)/batch_size):
             batch_data = get_a_batch(valid_data, t*batch_size)
-            acc, loss, sampled_points, sorted_points, score = model.validate(batch_data, temp)
+            acc, loss, sampled_points, score = model.validate(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
             all_t += 1
@@ -169,7 +169,7 @@ def training(sess):
         bar.finish()
         loss_valid = np.mean(loss_list)
         acc_valid = np.mean(acc_list)
-        sampled_imgs, score_imgs = batch_point2img(sampled_points, sorted_points, score)
+        sampled_imgs, score_imgs = batch_point2img(sampled_points, batch_data[0], score)
 
         info_train = '| Epoch:{:3d}'.format(epoch) + \
                      '| TrainLoss: {:2.5f}'.format(loss_train) + \
