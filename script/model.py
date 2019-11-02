@@ -20,12 +20,16 @@ class pointnet(object):
         # sampling
         if 'uniform' in flags.sample_mode:
             self.sampled_input = uniform_sampling(self.input, 100)
+            self.sorted_input = self.input
+            self.score = tf.zeros([self.batch_size, self.num_pt])
         elif 'normal' in flags.sample_mode:
             self.sampled_input, self. sorted_input, self.score = my_sampling(self.input, self.t, 100, True)
         elif'determine' in flags.sample_mode:
             self.sampled_input, self. sorted_input, self.score = my_sampling(self.input, self.t, 100, False)
         else:
             self.sampled_input = self.input
+            self.sorted_input = self.input
+            self.score = tf.zeros([self.batch_size, self.num_pt])
 
         logits = self.get_model(self.sampled_input, self.is_training)
         y = tf.argmax(logits, axis=1, output_type=tf.int32)
@@ -111,7 +115,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     score = model_utils.dense_layer(score_h1, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
     if noise_flag:
         noise = tf.nn.relu(tf.random.truncated_normal([b*n, 1], stddev=t**2)) # b*n, 1
-        score = tf.reshape(score + noise + 1e-8, [-1, n]) # b, n
+        score = tf.reshape(score + noise, [-1, n]) # b, n
     else:
         score = tf.reshape(score, [-1, n]) # b, n
     # sort with top_k

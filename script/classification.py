@@ -12,7 +12,7 @@ RANDOM_SEED = 1234
 flag = tf.app.flags
 
 flag.DEFINE_integer('batch_size', 16, 'Batch size to use during training.')
-flag.DEFINE_float('learning_rate', 1e-3, 'Learning rate.')
+flag.DEFINE_float('learning_rate', 1e-4, 'Learning rate.')
 flag.DEFINE_integer('n_hidden', 64, 'Size of each model layer.')
 flag.DEFINE_integer('num_row', 28, 'number of rows.')
 flag.DEFINE_integer('num_col', 28, 'number of columns.')
