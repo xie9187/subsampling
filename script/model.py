@@ -123,11 +123,6 @@ def my_sampling(features, t, k=100, noise_flag=True):
     coord2 = tf.reshape(sorted_indicies, [-1]) # b*n
     coords = tf.reshape(tf.stack([coord1, coord2], axis=1), [b, n, 2]) # b, n, 2 
     sorted_features = tf.gather_nd(features, coords) # b, n, d
-
-    if noise_flag: # denoise
-        sorted_noise = tf.gather_nd(noise, coords)
-        sorted_score = tf.gather_nd(score, coords)
-        sorted_score -= sorted_noise
         
     top_features, bot_features = tf.split(sorted_features, [k, n-k], axis=1)
     top_scores, bot_scores = tf.split(sorted_score, [k, n-k], axis=1)
