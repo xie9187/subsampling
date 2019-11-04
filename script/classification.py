@@ -193,6 +193,5 @@ def training(sess):
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)
     config.gpu_options.allow_growth = True
-    score_2d
     with tf.Session(config=config) as sess:
         training(sess)
