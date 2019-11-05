@@ -156,7 +156,7 @@ def linear(inputs,
     return res + bias_term
 
 
-def batch_norm(self, x, is_training=True, name=None):
+def batch_norm(x, is_training=True, name=None):
     return tf.contrib.layers.batch_norm(inputs=x,
                                         decay=0.95,
                                         center=True,
