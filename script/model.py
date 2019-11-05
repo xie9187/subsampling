@@ -110,8 +110,8 @@ def my_sampling(features, t, k=100, noise_flag=True):
     b, n, d = features.get_shape().as_list() # b, n, d
     # score for each point
     score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
-    score = model_utils.dense_layer(score_h1, 1, 'score', activation=None) # b*n, 1
-    score = tf.nn.sigmoid(score + tf.math.sqrt(1/t))
+    origin_score = model_utils.dense_layer(score_h1, 1, 'score', activation=None) # b*n, 1
+    score = tf.nn.sigmoid(origin_score + tf.math.sqrt(1/t))
     score = tf.reshape(score, [b, n]) # b, n
     if noise_flag:
         noise = tf.nn.relu(tf.random.truncated_normal([b, n], stddev=t**2)) # b, n
@@ -130,7 +130,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
     # sub_features = tf.pow(top_scores, t) * top_features
     sub_features = top_scores * top_features
-    return sub_features, score
+    return sub_features, tf.reshape(origin_score, [b, n])
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)
