@@ -23,8 +23,10 @@ class pointnet(object):
             self.score = tf.zeros([self.batch_size, self.num_pt])
         elif 'normal' in flags.sample_mode:
             self.sampled_input, self.score = my_sampling(self.input, self.t, 100, True)
-        elif'determine' in flags.sample_mode:
+        elif 'determine' in flags.sample_mode:
             self.sampled_input, self.score = my_sampling(self.input, self.t, 100, False)
+        elif 'concrete' in flags.sample_mode:
+            self.sampled_input, self.score = concrete_sampling(self.input, self.t, 100)
         else:
             self.sampled_input = self.input
             self.score = tf.zeros([self.batch_size, self.num_pt])
@@ -131,6 +133,20 @@ def my_sampling(features, t, k=100, noise_flag=True):
     sub_features = tf.pow(top_scores, t) * top_features
     # sub_features = top_scores * top_features
     return sub_features, tf.reshape(origin_score, [b, n])
+
+def concrete_sampling(features, t, k=100):
+    b, n, d = features.get_shape().as_list() # b, n, d
+    alpha_h = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'alpha_h') # b*n, 256
+    alpha = model_utils.dense_layer(alpha_h, 1, 'alpha', activation=None) # b*n, 1
+    alpha_n = tf.tile(tf.reshape(alpha, [b, 1, n]), [1, k, 1]) # b, k, n
+    uniform_noise = tf.random_uniform([b, k, n]) # b, k, n
+    gumble_noise = -tf.log(-tf.log(uniform_noise)) # b, k, n
+    noisy_alpha = (alpha_n + gumble_noise)/t
+    samples = tf.nn.softmax(noisy_alpha, axis=-1) # b, k, n
+    sub_features = tf.matmul(samples, features) # b, k, d
+    print(samples, features, sub_features)
+    assert False
+    return sub_features, tf.reshape(alpha, [b, n])
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)
