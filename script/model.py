@@ -28,8 +28,8 @@ class pointnet(object):
         else:
             self.sampled_input = self.input
             self.score = tf.zeros([self.batch_size, self.num_pt])
-
-        logits = self.get_model(self.sampled_input, self.is_training)
+        sampled_input_bn = model_utils.batch_norm(self.sampled_input, name='sampled_input_bn')
+        logits = self.get_model(sampled_input_bn, self.is_training)
         y = tf.argmax(logits, axis=1, output_type=tf.int32)
         self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label, logits=logits)
         self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
@@ -128,8 +128,8 @@ def my_sampling(features, t, k=100, noise_flag=True):
 
     # sampled features
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
-    # sub_features = tf.pow(top_scores, t) * top_features
-    sub_features = top_scores * top_features
+    sub_features = tf.pow(top_scores, t) * top_features
+    # sub_features = top_scores * top_features
     return sub_features, tf.reshape(origin_score, [b, n])
 
 if __name__ == '__main__':
