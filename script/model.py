@@ -30,8 +30,8 @@ class pointnet(object):
         else:
             self.sampled_input = self.input
             self.score = tf.zeros([self.batch_size, self.num_pt])
-        sampled_input_bn = model_utils.batch_norm(self.sampled_input, name='sampled_input_bn')
-        logits = self.get_model(sampled_input_bn, self.is_training)
+        # sampled_input_bn = model_utils.batch_norm(self.sampled_input, name='sampled_input_bn')
+        logits = self.get_model(self.sampled_input, self.is_training)
         y = tf.argmax(logits, axis=1, output_type=tf.int32)
         self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label, logits=logits)
         self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
@@ -112,7 +112,7 @@ def my_sampling(features, t, k=100, noise_flag=True):
     b, n, d = features.get_shape().as_list() # b, n, d
     # score for each point
     score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
-    score_h1 = model_utils.batch_norm(score_h1, name='score_h1_bn')
+    # score_h1 = model_utils.batch_norm(score_h1, name='score_h1_bn')
     origin_score = model_utils.dense_layer(score_h1, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
     score = tf.reshape(origin_score, [b, n]) # b, n
     if noise_flag:
@@ -130,8 +130,8 @@ def my_sampling(features, t, k=100, noise_flag=True):
 
     # sampled features
     top_scores = tf.tile(tf.expand_dims(top_scores, axis=2), [1, 1, d]) # b, k, d
-    sub_features = tf.pow(top_scores, t) * top_features
-    # sub_features = top_scores * top_features
+    # sub_features = tf.pow(top_scores, t) * top_features
+    sub_features = top_scores * top_features
     return sub_features, tf.reshape(origin_score, [b, n])
 
 def concrete_sampling(features, t, k=100):
@@ -141,11 +141,9 @@ def concrete_sampling(features, t, k=100):
     alpha_n = tf.tile(tf.reshape(alpha, [b, 1, n]), [1, k, 1]) # b, k, n
     uniform_noise = tf.random_uniform([b, k, n]) # b, k, n
     gumble_noise = -tf.log(-tf.log(uniform_noise)) # b, k, n
-    noisy_alpha = (alpha_n + gumble_noise)/t
+    noisy_alpha = (alpha_n + gumble_noise)/(t*10.)
     samples = tf.nn.softmax(noisy_alpha, axis=-1) # b, k, n
     sub_features = tf.matmul(samples, features) # b, k, d
-    print(samples, features, sub_features)
-    assert False
     return sub_features, tf.reshape(alpha, [b, n])
 
 if __name__ == '__main__':
@@ -159,4 +157,4 @@ if __name__ == '__main__':
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         sess.run(init_op)  
         b_val, c_val = sess.run([b, c], feed_dict={a: data, t: 1.})
-        print c_val
+        print(c_val)

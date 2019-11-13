@@ -24,13 +24,13 @@ flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling/saved_network', 'saved
 flag.DEFINE_integer('max_epoch', 100, 'max epochs.')
 flag.DEFINE_boolean('save_model', True, 'save model.')
 flag.DEFINE_boolean('load_model', False, 'load model.')
-flag.DEFINE_boolean('is_training', False, 'training or not.')
+flag.DEFINE_boolean('is_training', True, 'training or not.')
 flag.DEFINE_string('model_name', 'test', 'model name.')
-flag.DEFINE_string('sample_mode', 'normal', '[uniform, normal, determine]')
+flag.DEFINE_string('sample_mode', 'normal', '[uniform, normal, determine, concrete]')
 flags = flag.FLAGS
 
 def read_data(data_path):
-    with open(data_path, 'rb') as csvfile:
+    with open(data_path, 'rt') as csvfile:
         data = np.stack(list(csv.reader(csvfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)), axis=0)
     # convert to 2d point cloud
     x = data[:, 1:].astype(np.int32)
@@ -80,7 +80,7 @@ def show_img(image_2d):
 def get_a_batch(data, start):
     batch_x = []
     batch_y = []
-    for i in xrange(flags.batch_size):
+    for i in range(flags.batch_size):
         sample = data[min(start+i, len(data)-1)]
         points = sample[0]
         np.random.shuffle(points)
@@ -144,7 +144,7 @@ def training(sess):
                                       widgets=[progressbar.Bar('=', '[', ']'), ' ', 
                                                progressbar.Percentage()])
         all_t = 0
-        for t in xrange(len(train_data)/batch_size):
+        for t in range(int(len(train_data)/batch_size)):
             batch_data = get_a_batch(train_data, t*batch_size)
             acc, loss, _ = model.train(batch_data, temp)
             loss_list.append(loss)
@@ -159,7 +159,7 @@ def training(sess):
         acc_list = []
         end_flag = False
         pos = 0
-        for t in xrange(len(valid_data)/batch_size):
+        for t in range(int(len(valid_data)/batch_size)):
             batch_data = get_a_batch(valid_data, t*batch_size)
             acc, loss, sampled_points, score = model.validate(batch_data, temp)
             loss_list.append(loss)
@@ -187,7 +187,7 @@ def training(sess):
         summary_writer.add_summary(summary, epoch)
         if flags.save_model and epoch == flags.max_epoch-1:
             saver.save(sess, os.path.join(model_dir, 'network') , global_step=epoch)
-        if 'normal' in flags.sample_mode or 'determine' in flags.sample_mode:
+        if flags.sample_mode in ['normal', 'determine', 'concrete']:
             temp *= decay
 
 if __name__ == '__main__':
