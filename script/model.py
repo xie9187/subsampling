@@ -11,6 +11,7 @@ class network(object):
         self.num_class = flags.num_class
         self.learning_rate = flags.learning_rate
         self.batch_size = flags.batch_size
+        self.task = flags.task
 
         self.input = tf.placeholder(tf.float32, shape=[self.batch_size, self.num_pt, self.dim_input], name='input') # b, n, input
         self.label = tf.placeholder(tf.int32, shape=[self.batch_size], name='label') # b, label
@@ -19,31 +20,34 @@ class network(object):
 
         # sampling
         if 'uniform' in flags.sample_mode:
-            self.sampled_input = uniform_sampling(self.input, 100)
+            self.sampled_input = uniform_sampling(self.input, int(self.num_pt/4))
             self.score = tf.zeros([self.batch_size, self.num_pt])
         elif 'normal' in flags.sample_mode:
-            self.sampled_input, self.score = my_sampling(self.input, self.t, 100, True)
+            self.sampled_input, self.score = my_sampling(self.input, self.t, int(self.num_pt/4), True)
         elif 'determine' in flags.sample_mode:
-            self.sampled_input, self.score = my_sampling(self.input, self.t, 100, False)
+            self.sampled_input, self.score = my_sampling(self.input, self.t, int(self.num_pt/4), False)
         elif 'concrete' in flags.sample_mode:
-            self.sampled_input, self.score = concrete_sampling(self.input, self.t, 100)
+            self.sampled_input, self.score = concrete_sampling(self.input, self.t, int(self.num_pt/4))
         else:
             self.sampled_input = self.input
             self.score = tf.zeros([self.batch_size, self.num_pt])
-        # sampled_input_bn = model_utils.batch_norm(self.sampled_input, name='sampled_input_bn')
-        logits = self.pointnet(self.sampled_input, self.is_training)
-        y = tf.argmax(logits, axis=1, output_type=tf.int32)
-        self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label, logits=logits)
+        if flags.task == 'classification':
+            logits = self.pointnet(self.sampled_input, self.is_training)
+            y = tf.argmax(logits, axis=1, output_type=tf.int32)
+            self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label, logits=logits)
+            correct_pred = tf.equal(y, self.label)
+            self.acc = tf.reduce_mean(tf.cast(correct_pred, tf.int32))
+        elif flags.task == 'reconstruction':
+            pass
+
         self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
-        correct_pred = tf.equal(y, self.label)
-        self.acc = tf.reduce_mean(tf.cast(correct_pred, tf.int32))
+
 
     def pointnet(self, inputs, is_training, bn_decay=None):
         """ Classification PointNet, input is BxNx3, output Bx10 """
         shape = inputs.get_shape().as_list()
         batch_size = shape[0]
         num_pt = shape[1]
-        
         input_image = tf.expand_dims(inputs, -1)
          
         # Point functions (MLP implemented as conv2d)
@@ -67,20 +71,22 @@ class network(object):
                              padding='VALID', stride=[1,1],
                              bn=True, is_training=is_training,
                              scope='conv5', bn_decay=bn_decay)
-
-        # Symmetric function: max pooling
-        net = tf_util.max_pool2d(net, [num_pt,1],
-                                 padding='VALID', scope='maxpool')
         
-        # MLP on global point cloud vector
-        net = tf.reshape(net, [batch_size, -1])
-        net = tf_util.fully_connected(net, 512, bn=True, is_training=is_training,
-                                      scope='fc1', bn_decay=bn_decay)
-        net = tf_util.fully_connected(net, 256, bn=True, is_training=is_training,
-                                      scope='fc2', bn_decay=bn_decay)
-        net = tf_util.dropout(net, keep_prob=0.7, is_training=is_training,
-                              scope='dp1')
-        net = tf_util.fully_connected(net, self.num_class, activation_fn=None, scope='fc3')
+        if self.task == 'classification':
+            # Symmetric function: max pooling
+            net = tf_util.max_pool2d(net, [num_pt,1],
+                                 padding='VALID', scope='maxpool')
+            # MLP on global point cloud vector
+            net = tf.reshape(net, [batch_size, -1])
+            net = tf_util.fully_connected(net, 512, bn=True, is_training=is_training,
+                                          scope='fc1', bn_decay=bn_decay)
+            net = tf_util.fully_connected(net, 256, bn=True, is_training=is_training,
+                                          scope='fc2', bn_decay=bn_decay)
+            net = tf_util.dropout(net, keep_prob=0.7, is_training=is_training,
+                                  scope='dp1')
+            net = tf_util.fully_connected(net, self.num_class, activation_fn=None, scope='fc3')
+        elif self.task == 'reconstruction':
+            pass
 
         return net
 
