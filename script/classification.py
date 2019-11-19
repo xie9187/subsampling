@@ -6,7 +6,7 @@ import os
 import progressbar
 import random
 import matplotlib.pyplot as plt
-from model import pointnet
+from model import network
 
 RANDOM_SEED = 1234
 flag = tf.app.flags
