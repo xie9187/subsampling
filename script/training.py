@@ -1,12 +1,12 @@
 import numpy as np
 import tensorflow as tf
-import csv
 import time
 import os
 import progressbar
 import random
-import matplotlib.pyplot as plt
 from model import network
+from utils import *
+from tensorboard.plugins.mesh import summary as mesh_summary
 
 RANDOM_SEED = 1234
 flag = tf.app.flags
@@ -16,9 +16,9 @@ flag.DEFINE_float('learning_rate', 1e-3, 'Learning rate.')
 flag.DEFINE_integer('n_hidden', 64, 'Size of each model layer.')
 flag.DEFINE_integer('num_row', 28, 'number of rows.')
 flag.DEFINE_integer('num_col', 28, 'number of columns.')
-flag.DEFINE_integer('num_pt', 28**2, 'max num of point.')
+flag.DEFINE_integer('num_pt', 1024, 'max num of point.') # 28**2
 flag.DEFINE_integer('dim_input', 3, 'Size of input.')
-flag.DEFINE_integer('num_class', 10, 'Number of classes.')
+flag.DEFINE_integer('num_class', 40, 'Number of classes.')
 flag.DEFINE_string('data_dir', '/Work/data/mnist', 'Data directory')
 flag.DEFINE_string('model_dir', '/Work/git/3D/subsampling/saved_network', 'saved model directory.')
 flag.DEFINE_integer('max_epoch', 100, 'max epochs.')
@@ -27,73 +27,22 @@ flag.DEFINE_boolean('load_model', False, 'load model.')
 flag.DEFINE_boolean('is_training', True, 'training or not.')
 flag.DEFINE_string('model_name', 'test', 'model name.')
 flag.DEFINE_string('sample_mode', 'normal', '[uniform, normal, determine, concrete]')
+flag.DEFINE_string('task', 'classification', '[reconstruction, classification]')
 flags = flag.FLAGS
 
-def read_data(data_path):
-    with open(data_path, 'rt') as csvfile:
-        data = np.stack(list(csv.reader(csvfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)), axis=0)
-    # convert to 2d point cloud
-    x = data[:, 1:].astype(np.int32)
-    y = data[:, 0].astype(np.int32)
-    data = []
-    for image_1d, category in zip(x, y):
-        image_2d = np.reshape(image_1d, [flags.num_row, flags.num_col])
-        # show_img(image_2d)
-        rows, columns = np.where(image_2d >= 0)
-        val = image_2d[rows, columns]/255.
-        points_xyv = np.stack([rows/float(flags.num_row), columns/float(flags.num_col), val], axis=1).astype(np.float32)
-        # show_points_as_img(points_xyv)
-        data.append([points_xyv, category])
-    return data
-
-def show_points_as_img(points_xyv):
-    image_2d = np.zeros([flags.num_row, flags.num_col], dtype=np.float32)
-    image_2d[(points_xyv[:, 0]*flags.num_row).astype(np.int32), 
-              (points_xyv[:, 1]*flags.num_col).astype(np.int32)] = points_xyv[:, 2]
-    plt.figure('point 2 image')
-    plt.imshow(image_2d, cmap="gray")
-    plt.pause(0.1)
-
-def batch_point2img(sampled_points_xyv, points_xyv, score): # b, n, 3
-    image_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
-    score_2d = np.zeros([flags.batch_size, flags.num_row, flags.num_col], dtype=np.float32)
-    score = np.reshape(score, [flags.batch_size, flags.num_pt])
-    for i in range(flags.batch_size):
-        x = (sampled_points_xyv[i, :, 0]*flags.num_row).astype(np.int32)
-        y = (sampled_points_xyv[i, :, 1]*flags.num_col).astype(np.int32)
-        x[x > flags.num_row-1] = flags.num_row - 1
-        y[y > flags.num_col-1] = flags.num_col - 1
-        x[x < 0] = 0
-        y[y < 0] = 0
-        image_2d[i, x, y] = sampled_points_xyv[i, :, 2]
-        score_2d[i, (points_xyv[i, :, 0]*flags.num_row).astype(np.int32), 
-                    (points_xyv[i, :, 1]*flags.num_col).astype(np.int32)] = score[i, :]
-    return np.reshape(image_2d, [flags.batch_size, flags.num_row, flags.num_col, 1]), \
-           np.reshape(score_2d, [flags.batch_size, flags.num_row, flags.num_col, 1])
-
-
-def show_img(image_2d):
-    plt.figure('raw image')
-    plt.imshow(image_2d, cmap="gray")
-    plt.pause(0.1)
-
-def get_a_batch(data, start):
-    batch_x = []
-    batch_y = []
-    for i in range(flags.batch_size):
-        sample = data[min(start+i, len(data)-1)]
-        points = sample[0]
-        np.random.shuffle(points)
-        # show_points_as_img(points)
-        batch_x.append(points)
-        batch_y.append(sample[1])
-    return np.stack(batch_x), np.stack(batch_y)
-
 def training(sess):
-    train_data = read_data(os.path.join(flags.data_dir, 'mnist_train.csv'))
-    valid_data = read_data(os.path.join(flags.data_dir, 'mnist_test.csv'))
+    print('load data from: ', flags.data_dir)
+    if 'mnist' in flags.data_dir:
+        train_data = read_mnist_data(os.path.join(flags.data_dir, 'mnist_train.csv'))
+        valid_data = read_mnist_data(os.path.join(flags.data_dir, 'mnist_test.csv'))
+    elif 'modelnet40' in flags.data_dir:
+        train_data, valid_data, _ = read_modelnet40_data(flags.data_dir, flags.num_pt)
+    else:
+        print('data path unrecognised!')
+        return
     batch_size = flags.batch_size
-    model = pointnet(sess, flags)
+
+    model = network(sess, flags)
     init_temp = 1.
     final_temp = 0.01
     decay = (final_temp/init_temp)**(1./float(flags.max_epoch))
@@ -119,10 +68,9 @@ def training(sess):
         else:
             print('model not found')
     summary_writer = tf.summary.FileWriter(model_dir, sess.graph)
-    image_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='image_ph')
-    image_summary = tf.summary.image('sampled_img', image_ph)
-    score_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_row, flags.num_col, 1], name='score_ph')
-    score_summary = tf.summary.image('score_img', score_ph)
+    xyz_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_pt, 3], name='xyz_ph')
+    rgb_ph = tf.placeholder(tf.float32, shape=[flags.batch_size, flags.num_pt, 3], name='rgb_ph')
+    point_summary = mesh_summary.op('point_cloud', vertices=xyz_ph, colors=rgb_ph)
     train_acc_ph = tf.placeholder(tf.float32, shape=[], name='train_acc_ph')
     train_acc_summary = tf.summary.scalar('train_acc', train_acc_ph)
     test_acc_ph = tf.placeholder(tf.float32, shape=[], name='test_acc_ph')
@@ -145,7 +93,7 @@ def training(sess):
                                                progressbar.Percentage()])
         all_t = 0
         for t in range(int(len(train_data)/batch_size)):
-            batch_data = get_a_batch(train_data, t*batch_size)
+            batch_data = get_a_batch(train_data, t*batch_size, batch_size)
             acc, loss, _ = model.train(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
@@ -160,7 +108,7 @@ def training(sess):
         end_flag = False
         pos = 0
         for t in range(int(len(valid_data)/batch_size)):
-            batch_data = get_a_batch(valid_data, t*batch_size)
+            batch_data = get_a_batch(valid_data, t*batch_size, batch_size)
             acc, loss, sampled_points, score = model.validate(batch_data, temp)
             loss_list.append(loss)
             acc_list.append(acc)
@@ -169,7 +117,8 @@ def training(sess):
         bar.finish()
         loss_valid = np.mean(loss_list)
         acc_valid = np.mean(acc_list)
-        sampled_imgs, score_imgs = batch_point2img(sampled_points, batch_data[0], score)
+        points_rgb = (np.stack([score, np.zeros_like(score), np.zeros_like(score)], axis=2)*255).astype(int)
+        points_xyz = batch_data[0]
 
         info_train = '| Epoch:{:3d}'.format(epoch) + \
                      '| TrainLoss: {:2.5f}'.format(loss_train) + \
@@ -179,8 +128,8 @@ def training(sess):
                      '| Time(min): {:2.1f}'.format((time.time() - start_time)/60.) + \
                      '| Temp: {:1.5f}'.format(temp)
         print(info_train)
-        summary = sess.run(merged, feed_dict={image_ph: sampled_imgs,
-                                              score_ph: score_imgs,
+        summary = sess.run(merged, feed_dict={xyz_ph: points_xyz,
+                                              rgb_ph: points_rgb,
                                               train_acc_ph: acc_train,
                                               test_acc_ph: acc_valid,
                                               model.t: temp})
