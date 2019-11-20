@@ -8,24 +8,25 @@ class network(object):
         self.sess = sess
         self.num_pt = flags.num_pt
         self.dim_input = flags.dim_input
+        self.dim_fpfh = flags.fpfh
         self.num_class = flags.num_class
         self.learning_rate = flags.learning_rate
         self.batch_size = flags.batch_size
         self.task = flags.task
 
         self.input = tf.placeholder(tf.float32, shape=[self.batch_size, self.num_pt, self.dim_input], name='input') # b, n, input
+        self.fpfh = tf.placeholder(tf.float32, shape=[self.batch_size, self.num_pt, self.dim_fpfh], name='fpfh') # b, n, input
         self.label = tf.placeholder(tf.int32, shape=[self.batch_size], name='label') # b, label
         self.is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
         self.t = tf.placeholder(tf.float32, shape=[], name='temperature')
+
 
         # sampling
         if 'uniform' in flags.sample_mode:
             self.sampled_input = uniform_sampling(self.input, int(self.num_pt/4))
             self.score = tf.zeros([self.batch_size, self.num_pt])
         elif 'normal' in flags.sample_mode:
-            self.sampled_input, self.score = my_sampling(self.input, self.t, int(self.num_pt/4), True)
-        elif 'determine' in flags.sample_mode:
-            self.sampled_input, self.score = my_sampling(self.input, self.t, int(self.num_pt/4), False)
+            self.sampled_input, self.score = normal_sampling(self.input, self.t, int(self.num_pt/4))
         elif 'concrete' in flags.sample_mode:
             self.sampled_input, self.score = concrete_sampling(self.input, self.t, int(self.num_pt/4))
         else:
@@ -71,22 +72,19 @@ class network(object):
                              padding='VALID', stride=[1,1],
                              bn=True, is_training=is_training,
                              scope='conv5', bn_decay=bn_decay)
-        
-        if self.task == 'classification':
-            # Symmetric function: max pooling
-            net = tf_util.max_pool2d(net, [num_pt,1],
-                                 padding='VALID', scope='maxpool')
-            # MLP on global point cloud vector
-            net = tf.reshape(net, [batch_size, -1])
-            net = tf_util.fully_connected(net, 512, bn=True, is_training=is_training,
-                                          scope='fc1', bn_decay=bn_decay)
-            net = tf_util.fully_connected(net, 256, bn=True, is_training=is_training,
-                                          scope='fc2', bn_decay=bn_decay)
-            net = tf_util.dropout(net, keep_prob=0.7, is_training=is_training,
-                                  scope='dp1')
-            net = tf_util.fully_connected(net, self.num_class, activation_fn=None, scope='fc3')
-        elif self.task == 'reconstruction':
-            pass
+
+        # Symmetric function: max pooling
+        net = tf_util.max_pool2d(net, [num_pt,1],
+                             padding='VALID', scope='maxpool')
+        # MLP on global point cloud vector
+        net = tf.reshape(net, [batch_size, -1])
+        net = tf_util.fully_connected(net, 512, bn=True, is_training=is_training,
+                                      scope='fc1', bn_decay=bn_decay)
+        net = tf_util.fully_connected(net, 256, bn=True, is_training=is_training,
+                                      scope='fc2', bn_decay=bn_decay)
+        net = tf_util.dropout(net, keep_prob=0.7, is_training=is_training,
+                              scope='dp1')
+        net = tf_util.fully_connected(net, self.num_class, activation_fn=None, scope='fc3')
 
         return net
 
@@ -114,15 +112,26 @@ def uniform_sampling(features, k=100):
     sub_features = tf.gather_nd(features, coords) # b, k, d
     return sub_features
 
-def my_sampling(features, t, k=100, noise_flag=True):
+def concrete_sampling(features, t, k=100):
+    b, n, d = features.get_shape().as_list() # b, n, d
+    alpha_h = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'alpha_h') # b*n, 256
+    alpha = model_utils.dense_layer(alpha_h, 1, 'alpha', activation=None) # b*n, 1
+    alpha_n = tf.tile(tf.reshape(alpha, [b, 1, n]), [1, k, 1]) # b, k, n
+    uniform_noise = tf.random_uniform([b, k, n]) # b, k, n
+    gumble_noise = -tf.log(-tf.log(uniform_noise)) # b, k, n
+    noisy_alpha = (alpha_n + gumble_noise)/(t*10.)
+    samples = tf.nn.softmax(noisy_alpha, axis=-1) # b, k, n
+    sub_features = tf.matmul(samples, features) # b, k, d
+    return sub_features, tf.reshape(alpha, [b, n])
+
+def normal_sampling(features, t, k=100):
     b, n, d = features.get_shape().as_list() # b, n, d
     # score for each point
     score_h1 = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'score_h1') # b*n, 256
     origin_score = model_utils.dense_layer(score_h1, 1, 'score', activation=tf.nn.sigmoid) # b*n, 1
     score = tf.reshape(origin_score, [b, n]) # b, n
-    if noise_flag:
-        noise = tf.nn.relu(tf.random.truncated_normal([b, n], stddev=t**2)) # b, n
-        score += noise # b, n
+    noise = tf.nn.relu(tf.random.truncated_normal([b, n], stddev=t**2)) # b, n
+    score += noise # b, n
     # sort with top_k
     sorted_score, sorted_indicies = tf.nn.top_k(score, n) # b, n
     coord1 = tf.reshape(tf.tile(tf.expand_dims(tf.range(b), axis=-1), [1, n]), [-1]) # b*k
@@ -139,17 +148,10 @@ def my_sampling(features, t, k=100, noise_flag=True):
     sub_features = top_scores * top_features
     return sub_features, tf.reshape(score, [b, n])
 
-def concrete_sampling(features, t, k=100):
-    b, n, d = features.get_shape().as_list() # b, n, d
-    alpha_h = model_utils.dense_layer(tf.reshape(features, [-1, d]), 256, 'alpha_h') # b*n, 256
-    alpha = model_utils.dense_layer(alpha_h, 1, 'alpha', activation=None) # b*n, 1
-    alpha_n = tf.tile(tf.reshape(alpha, [b, 1, n]), [1, k, 1]) # b, k, n
-    uniform_noise = tf.random_uniform([b, k, n]) # b, k, n
-    gumble_noise = -tf.log(-tf.log(uniform_noise)) # b, k, n
-    noisy_alpha = (alpha_n + gumble_noise)/(t*10.)
-    samples = tf.nn.softmax(noisy_alpha, axis=-1) # b, k, n
-    sub_features = tf.matmul(samples, features) # b, k, d
-    return sub_features, tf.reshape(alpha, [b, n])
+def reinforce_sampling(features):
+    pass
+
+
 
 if __name__ == '__main__':
     config = tf.ConfigProto(allow_soft_placement=True)
