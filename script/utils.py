@@ -3,6 +3,7 @@ import numpy as np
 import os, sys, glob
 import csv, h5py
 import pptk
+import pclpy
 
 def load_h5(fname):
     """ load .h5 file and return a dict """
